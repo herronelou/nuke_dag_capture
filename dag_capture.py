@@ -17,10 +17,10 @@ def get_dag():
         stack.extend(c for c in widget.children() if c.isWidgetType())
 
 
-def grab_dag(dag, path):
+def grab_dag(dag, painter, xpos, ypos):
     dag.updateGL()  # This does some funky back and forth but function grabs the wrong thing without it
     pix = dag.grabFrameBuffer()
-    pix.save(path)
+    painter.drawImage(xpos, ypos, pix)
 
 
 class DagCapture(threading.Thread):
@@ -64,16 +64,15 @@ class DagCapture(threading.Thread):
             for ytile in range(vertical_tiles):
                 top = min_y + capture_height * ytile
                 nuke.executeInMainThread(nuke.zoom, (1, (left + (capture_width + self.ignore_right) / 2, top + capture_height / 2)))
-                time.sleep(.5)
-                nuke.executeInMainThread(grab_dag, (dag, self.path))
-                time.sleep(.5)
-                screengrab = QtGui.QImage(self.path)
-                painter.drawImage(capture_width * xtile, capture_height * ytile, screengrab)
+                time.sleep(.2)
+                nuke.executeInMainThread(grab_dag, (dag, painter, capture_width * xtile, capture_height * ytile))
+        time.sleep(.2)
         painter.end()
         pixmap.save(self.path)
         nuke.executeInMainThread(nuke.zoom, (original_zoom, original_center))
         print "Capture Complete"
 
 
-t = DagCapture("C:\\Users\\erwan\\Downloads\\test.png")
-t.start()
+if __name__ == '__main__':
+    t = DagCapture("C:\\Users\\herro\\Downloads\\test.png")
+    t.start()
