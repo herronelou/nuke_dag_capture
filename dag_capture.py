@@ -203,13 +203,16 @@ class DagCapture(QtCore.QThread):
         self.zoom = zoom
 
     def run(self):
-        print "In thread"
         # Store the current dag size and zoom
         original_zoom = nuke.zoom()
         original_center = nuke.center()
         # Calculate the total size of the DAG
-        min_x, min_y, max_x, max_y = self.dag_bbox
+        min_x, min_y, max_x, max_y = self.bbox
         zoom = self.zoom
+        min_x -= int(self.margins / zoom)
+        min_y -= int(self.margins / zoom)
+        max_x += int(self.margins / zoom)
+        max_y += int(self.margins / zoom)
 
         # Get the Dag Widget
         dag = get_dag()
@@ -221,22 +224,20 @@ class DagCapture(QtCore.QThread):
         capture_height = dag.height()
 
         # Calculate the number of tiles required to cover all
-        image_width = (max_x - min_x) * zoom + self.margins * 2
-        image_height = (max_y - min_y) * zoom + self.margins * 2
-        capture_image_width = (max_x - min_x) * zoom + (self.margins * 2 / zoom)
-        capture_image_height = (max_y - min_y) * zoom + (self.margins * 2 / zoom)
-        horizontal_tiles = int(ceil(capture_image_width / float(capture_width)))
-        vertical_tiles = int(ceil(capture_image_height / float(capture_height)))
+        image_width = int((max_x - min_x) * zoom)
+        image_height = int((max_y - min_y) * zoom)
+        horizontal_tiles = int(ceil(image_width / float(capture_width)))
+        vertical_tiles = int(ceil(image_height / float(capture_height)))
         # Create a pixmap to store the results
         pixmap = QtGui.QPixmap(image_width, image_height)
         painter = QtGui.QPainter(pixmap)
         painter.setCompositionMode(painter.CompositionMode_SourceOver)
         # Move the dag so that the top left corner is in the top left corner, screenshot, paste in the pixmap, repeat
         for tile_x in range(horizontal_tiles):
-            center_x = (min_x + capture_width * tile_x) + (capture_width + self.ignore_right) / 2
+            center_x = (min_x + capture_width / zoom * tile_x) + (capture_width / zoom + self.ignore_right) / 2
             for tile_y in range(vertical_tiles):
-                center_y = (min_y + capture_height * tile_y) + capture_height / 2
-                nuke.executeInMainThread(nuke.zoom, (1, (center_x, center_y)))
+                center_y = (min_y + capture_height / zoom * tile_y) + capture_height / zoom / 2
+                nuke.executeInMainThread(nuke.zoom, (zoom, (center_x, center_y)))
                 time.sleep(self.delay)
                 nuke.executeInMainThread(grab_dag, (dag, painter, capture_width * tile_x, capture_height * tile_y))
         time.sleep(self.delay)
