@@ -71,6 +71,7 @@ class DagCapturePanel(QtWidgets.QDialog):
         self.margins = QtWidgets.QSpinBox()
         self.margins.setRange(0, 1000)
         self.margins.setValue(20)
+        self.margins.setSuffix("px")
         self.margins.setSingleStep(10)
         self.margins.valueChanged.connect(self.display_info)
         form_layout.addRow("Margins", self.margins)
@@ -79,6 +80,7 @@ class DagCapturePanel(QtWidgets.QDialog):
         self.ignore_right = QtWidgets.QSpinBox()
         self.ignore_right.setRange(0, 1000)
         self.ignore_right.setValue(200)
+        self.ignore_right.setSuffix("px")
         self.ignore_right.setToolTip("The right side of the DAG usually contains a mini version of itself.\n"
                                      "This gets included in the screen capture, so it is required to crop it out. \n"
                                      "If you scaled it down, you can reduce this number to speed up capture slightly.")
@@ -234,7 +236,7 @@ class DagCapture(QtCore.QThread):
         painter.setCompositionMode(painter.CompositionMode_SourceOver)
         # Move the dag so that the top left corner is in the top left corner, screenshot, paste in the pixmap, repeat
         for tile_x in range(horizontal_tiles):
-            center_x = (min_x + capture_width / zoom * tile_x) + (capture_width / zoom + self.ignore_right) / 2
+            center_x = (min_x + capture_width / zoom * tile_x) + (capture_width + self.ignore_right) / zoom / 2
             for tile_y in range(vertical_tiles):
                 center_y = (min_y + capture_height / zoom * tile_y) + capture_height / zoom / 2
                 nuke.executeInMainThread(nuke.zoom, (zoom, (center_x, center_y)))
