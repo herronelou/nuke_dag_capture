@@ -1,5 +1,4 @@
 import time
-import threading
 import nuke
 
 from Qt import QtWidgets, QtOpenGL, QtGui, QtCore
@@ -33,9 +32,9 @@ class DagCapturePanel(QtWidgets.QDialog):
             raise RuntimeError("Couldn't get DAG widget")
 
         self.dag_bbox = None
-        # self.capture_size = None
-        self.capture_thread = DagCapture()
+        self.capture_thread = DagCapture(self.dag)
         self.capture_thread.finished.connect(self.show_finished_popup)
+        self.selection = []
 
         # UI
         self.setWindowTitle("DAG Capture options")
@@ -172,11 +171,15 @@ class DagCapturePanel(QtWidgets.QDialog):
         filename, _filter = QtWidgets.QFileDialog.getSaveFileName(parent=self, caption='Select output file',
                                                                   filter="PNG Image (*.png)")
         self.path.setText(filename)
-        print filename, type(filename)
 
     def do_capture(self):
-        print "doing capture"
-        # Check path is valid and writable
+        self.hide()
+
+        # Deselect nodes if required:
+        if self.deselect.isChecked():
+            for selected_node in nuke.selectedNodes():
+                self.selection.append(selected_node)
+                selected_node.setSelected(False)
         # Push settings to Thread
         self.capture_thread.path = self.path.text()
         self.capture_thread.margins = self.margins.value()
@@ -185,24 +188,29 @@ class DagCapturePanel(QtWidgets.QDialog):
         self.capture_thread.bbox = self.dag_bbox
         self.capture_thread.zoom = self.zoom_level.value()
         # Run thread
-        print "init complete"
         self.capture_thread.start()
-        pass
 
     def show_finished_popup(self):
-        nuke.message("Capture complete:\n"
-                     "{}".format(self.path.text()))
+        for node in self.selection:
+            node.setSelected(True)
+        if self.capture_thread.successful:
+            nuke.message("Capture complete:\n"
+                         "{}".format(self.path.text()))
+        else:
+            nuke.message("Something went wrong with the DAG capture, please check script editor for details")
 
 
 class DagCapture(QtCore.QThread):
-    def __init__(self, path='', margins=20, ignore_right=200, delay=0.3, bbox=(-50, 50, -50, 50), zoom=1.0):
+    def __init__(self, dag, path='', margins=20, ignore_right=200, delay=0.3, bbox=(-50, 50, -50, 50), zoom=1.0):
         super(DagCapture, self).__init__()
+        self.dag = dag
         self.path = path
         self.margins = margins
         self.ignore_right = ignore_right
         self.delay = delay
         self.bbox = bbox
         self.zoom = zoom
+        self.successful = False
 
     def run(self):
         # Store the current dag size and zoom
@@ -217,9 +225,7 @@ class DagCapture(QtCore.QThread):
         max_y += int(self.margins / zoom)
 
         # Get the Dag Widget
-        dag = get_dag()
-        if not dag:
-            raise RuntimeError("Couldn't get DAG widget")
+        dag = self.dag
 
         # Check the size of the current widget, excluding the right side (because of minimap)
         capture_width = dag.width() - self.ignore_right
@@ -244,13 +250,13 @@ class DagCapture(QtCore.QThread):
                 nuke.executeInMainThread(grab_dag, (dag, painter, capture_width * tile_x, capture_height * tile_y))
         time.sleep(self.delay)
         painter.end()
-        pixmap.save(self.path)
         nuke.executeInMainThread(nuke.zoom, (original_zoom, original_center))
-        print "Capture Complete"
+        save_sucessful = pixmap.save(self.path)
+        if not save_sucessful:
+            raise IOError("Failed to save PNG: %s" % self.path)
+        self.successful = True
 
 
 if __name__ == '__main__':
-    p = DagCapturePanel()
-    p.show()
-    # t = DagCapture("C:\\Users\\herro\\Downloads\\test.png")
-    # t.start()
+    dag_capture_panel = DagCapturePanel()
+    dag_capture_panel.show()
