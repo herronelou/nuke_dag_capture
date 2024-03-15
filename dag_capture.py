@@ -1,7 +1,6 @@
 import time
 import nuke
-
-from Qt import QtWidgets, QtOpenGL, QtGui, QtCore
+from PySide2 import QtWidgets, QtOpenGL, QtGui, QtCore
 from math import ceil
 
 
