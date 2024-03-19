@@ -35,7 +35,7 @@ class DagCapturePanel(QtWidgets.QDialog):
 
         self.dag_bbox = None
         self.capture_thread = DagCapture(self.dag)
-        self.capture_thread.finished.connect(self.show_finished_popup)
+        self.capture_thread.finished.connect(self.on_thread_finished)
         self.selection = []
 
         # UI
@@ -192,7 +192,7 @@ class DagCapturePanel(QtWidgets.QDialog):
         # Run thread
         self.capture_thread.start()
 
-    def show_finished_popup(self):
+    def on_thread_finished(self) -> None:
         for node in self.selection:
             node.setSelected(True)
         if self.capture_thread.successful:
