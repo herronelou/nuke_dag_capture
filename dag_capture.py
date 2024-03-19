@@ -237,10 +237,11 @@ class DagCapture(QtCore.QThread):
                                                    (dag, painter, capture_width * tile_x, capture_height * tile_y))
 
         painter.end()
-        save_sucessful = pixmap.save(self.path)
-        if not save_sucessful:
         nuke.executeInMainThreadWithResult(nuke.zoom, (original_zoom, original_center))
+        save_successful = pixmap.save(self.path)
+        if not save_successful:
             raise IOError("Failed to save PNG: %s" % self.path)
+
         self.successful = True
 
 
