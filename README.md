@@ -5,8 +5,16 @@ The first version was written as an answer to a [Stack Overflow Question](https:
 
 ## Usage
 
-For now the easiest way to use the script when required is to copy and paste the content of [dag_capture.py](dag_capture.py) into the Nuke script editor and execute the whole thing.
-Feel free to contact me if you want to install in a menu.py and can't figure it out yourself. 
+
+This script can be utilized in two methods. 
+
+The first is a temporary approach where you can directly copy and paste the 
+contents of [dag_capture.py](dag_capture.py) into the script editor and execute it entirely. 
+
+The second method involves a more permanent 
+setup. To do this, add the repository folder to the `%userprofile%/.nuke/init.py` file. If the init.py file does not exist 
+in your `%userprofile%/.nuke/` directory, simply copy the one provided in `dot_nuke` folder. Then, adjust the path in the 
+copied `init.py` file to correspond with the location where you cloned this repository.
 
 Pick a path for the desired location of the screenshot (.png format) and edit the options in the UI if necessary (defaults should work okay).
 
