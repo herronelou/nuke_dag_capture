@@ -22,8 +22,11 @@ def grab_dag(dag, painter, xpos, ypos):
 
 
 class DagCapturePanel(QtWidgets.QDialog):
-    def __init__(self):
-        super(DagCapturePanel, self).__init__()
+    """UI Panel for DAG capture options"""
+
+    def __init__(self) -> None:
+        parent = QApplication.instance().activeWindow()
+        super(DagCapturePanel, self).__init__(parent)
 
         # Variables
         self.dag = get_dag()
@@ -256,6 +259,12 @@ class DagCapture(QtCore.QThread):
         self.successful = True
 
 
-if __name__ == '__main__':
+def open_dag_capture() -> None:
+    """Opens a blocking dag capture"""
+    logging.info("Opening dag capture window")
     dag_capture_panel = DagCapturePanel()
     dag_capture_panel.show()
+
+
+if __name__ == '__main__':
+    open_dag_capture()
