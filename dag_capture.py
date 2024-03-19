@@ -144,13 +144,16 @@ class DagCapturePanel(QtWidgets.QDialog):
 
     def inspect_dag(self):
         nodes = nuke.allNodes() if self.capture.currentIndex() == 0 else nuke.selectedNodes()
-        # Calculate the total size of the DAG
-        min_x = min([node.xpos() for node in nodes])
-        min_y = min([node.ypos() for node in nodes])
-        max_x = max([node.xpos() + node.screenWidth() for node in nodes])
-        max_y = max([node.ypos() + node.screenHeight() for node in nodes])
-        self.dag_bbox = (min_x, min_y, max_x, max_y)
 
+        # Calculate the total size of the DAG
+        min_x = min_y = max_x = max_y = []
+        for node in nodes:
+            min_x.append(node.xpos())
+            min_y.append(node.ypos())
+            max_x.append(node.xpos() + node.screenWidth())
+            max_y.append(node.ypos() + node.screenWidth())
+
+        self.dag_bbox = (min(min_x), min(min_y), max(max_x), max(max_y))
         self.display_info()
 
     def show_file_browser(self):
