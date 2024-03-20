@@ -158,7 +158,7 @@ class DagCapturePanel(QtWidgets.QDialog):
         nodes = nuke.allNodes() if self.capture.currentIndex() == 0 else nuke.selectedNodes()
 
         # Calculate the total size of the DAG
-        min_x = min_y = max_x = max_y = []
+        min_x, min_y, max_x, max_y = [], [], [], []
         for node in nodes:
             min_x.append(node.xpos())
             min_y.append(node.ypos())
