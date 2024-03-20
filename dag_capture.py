@@ -163,7 +163,7 @@ class DagCapturePanel(QtWidgets.QDialog):
             min_x.append(node.xpos())
             min_y.append(node.ypos())
             max_x.append(node.xpos() + node.screenWidth())
-            max_y.append(node.ypos() + node.screenWidth())
+            max_y.append(node.ypos() + node.screenHeight())
 
         self.dag_bbox = (min(min_x), min(min_y), max(max_x), max(max_y))
         self.display_info()
