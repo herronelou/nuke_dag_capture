@@ -1,12 +1,10 @@
 import logging
-from typing import Tuple
-
 import nuke
 import time
 from PySide2 import QtWidgets, QtOpenGL, QtGui, QtCore
-from math import ceil
-
 from PySide2.QtWidgets import QApplication
+from math import ceil
+from typing import Tuple
 
 
 def get_dag() -> QtOpenGL.QGLWidget:
@@ -24,7 +22,8 @@ def get_dag() -> QtOpenGL.QGLWidget:
 
 def grab_dag(dag: QtOpenGL.QGLWidget, painter: QtGui.QPainter, xpos: int, ypos: int) -> None:
     """Draw dag frame buffer to painter image at given coordinates"""
-    dag.updateGL()  # This does some funky back and forth but function grabs the wrong thing without it
+    # updateGL does some funky stuff because grabFrameBuffer grabs the wrong thing without it
+    dag.updateGL()
     pix = dag.grabFrameBuffer()
     painter.drawImage(xpos, ypos, pix)
 
@@ -90,9 +89,11 @@ class DagCapturePanel(QtWidgets.QDialog):
         self.ignore_right.setRange(0, 1000)
         self.ignore_right.setValue(200)
         self.ignore_right.setSuffix("px")
-        self.ignore_right.setToolTip("The right side of the DAG usually contains a mini version of itself.\n"
-                                     "This gets included in the screen capture, so it is required to crop it out. \n"
-                                     "If you scaled it down, you can reduce this number to speed up capture slightly.")
+        self.ignore_right.setToolTip(
+            "The right side of the DAG usually contains a mini version of itself.\n"
+            "This gets included in the screen capture, so it is required to crop it out. \n"
+            "If you scaled it down, you can reduce this number to speed up capture slightly."
+        )
         self.ignore_right.valueChanged.connect(self.display_info)
         form_layout.addRow("Crop Right Side", self.ignore_right)
 
@@ -132,7 +133,9 @@ class DagCapturePanel(QtWidgets.QDialog):
         main_layout.addWidget(info_box)
 
         # Buttons
-        button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        button_box = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+        )
         button_box.accepted.connect(self.do_capture)
         button_box.rejected.connect(self.reject)
         main_layout.addWidget(button_box)
@@ -149,9 +152,12 @@ class DagCapturePanel(QtWidgets.QDialog):
         capture_width = self.dag.width()
         crop = self.ignore_right.value()
         if crop >= capture_width:
-            self.info.setText("Error: Crop is larger than capture area.\n"
-                              "Increase DAG size or reduce crop.")
+            self.info.setText(
+                "Error: Crop is larger than capture area.\n"
+                "Increase DAG size or reduce crop."
+            )
             return
+
         capture_width -= crop
         capture_height = self.dag.height()
 
@@ -189,8 +195,9 @@ class DagCapturePanel(QtWidgets.QDialog):
 
     def show_file_browser(self) -> None:
         """Display the file browser"""
-        filename, _filter = QtWidgets.QFileDialog.getSaveFileName(parent=self, caption='Select output file',
-                                                                  filter="PNG Image (*.png)")
+        filename, _filter = QtWidgets.QFileDialog.getSaveFileName(
+            parent=self, caption='Select output file',
+            filter="PNG Image (*.png)")
         self.path.setText(filename)
 
     def do_capture(self) -> None:
@@ -222,13 +229,18 @@ class DagCapturePanel(QtWidgets.QDialog):
 
         # Display a result popup
         if self.capture_thread.successful:
-            nuke.message("Capture complete:\n"
-                         "{}".format(self.path.text()))
+            nuke.message(
+                "Capture complete:\n"
+                "{}".format(self.path.text())
+            )
         else:
-            nuke.message("Something went wrong with the DAG capture, please check script editor for details")
+            nuke.message(
+                "Something went wrong with the DAG capture, please check script editor for details"
+            )
 
 
 class DagCapture(QtCore.QThread):
+    """Thread class for capturing screenshot of Nuke DAG"""
     def __init__(
             self,
             dag: QtOpenGL.QGLWidget,
@@ -250,6 +262,7 @@ class DagCapture(QtCore.QThread):
         self.successful = False
 
     def run(self) -> None:
+        """On thread start"""
         # Store the current dag size and zoom
         original_zoom = nuke.zoom()
         original_center = nuke.center()
@@ -280,16 +293,19 @@ class DagCapture(QtCore.QThread):
         painter = QtGui.QPainter(pixmap)
         painter.setCompositionMode(painter.CompositionMode_SourceOver)
 
-        # Move the dag so that the top left corner is in the top left corner, screenshot, paste in the pixmap, repeat
+        # Move the dag so that the top left corner is in the top left corner,
+        # screenshot, paste in the pixmap, repeat
         for tile_x in range(horizontal_tiles):
-            center_x = (min_x + capture_width / zoom * tile_x) + (capture_width + self.ignore_right) / zoom / 2
+            x_offset_tile = (min_x + capture_width / zoom * tile_x)
+            x_offset_zoom = (capture_width + self.ignore_right) / zoom / 2
+            center_x = x_offset_tile + x_offset_zoom
             for tile_y in range(vertical_tiles):
                 center_y = (min_y + capture_height / zoom * tile_y) + capture_height / zoom / 2
                 nuke.executeInMainThreadWithResult(nuke.zoom, (zoom, (center_x, center_y)))
                 time.sleep(self.delay)
                 nuke.executeInMainThreadWithResult(grab_dag,
-                                                   (dag, painter, capture_width * tile_x, capture_height * tile_y))
-
+                                                   (dag, painter, capture_width * tile_x,
+                                                    capture_height * tile_y))
         time.sleep(self.delay)
         painter.end()
         nuke.executeInMainThreadWithResult(nuke.zoom, (original_zoom, original_center))
