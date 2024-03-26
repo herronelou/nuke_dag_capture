@@ -3,6 +3,10 @@
 This is a python script that allows to capture a PNG image of the Nuke node graph. 
 The first version was written as an answer to a [Stack Overflow Question](https://stackoverflow.com/questions/64674724/extract-a-vector-image-or-high-res-image-from-nukes-node-graph), but the code has since evolved a bit to include more options and a UI panel.
 
+# Compatibility
+
+The current version is compatible with Nuke 13 and above (python 3). For code compatible with older versions of Nuke, look at release 1.0.0 on GitHub.
+
 ## Usage
 
 
