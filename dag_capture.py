@@ -1,10 +1,14 @@
-import time
+import logging
 import nuke
+import time
 from PySide2 import QtWidgets, QtOpenGL, QtGui, QtCore
+from PySide2.QtWidgets import QApplication
 from math import ceil
+from typing import Tuple
 
 
-def get_dag():
+def get_dag() -> QtOpenGL.QGLWidget:
+    """Retrieve the QGLWidget of DAG graph"""
     stack = QtWidgets.QApplication.topLevelWidgets()
     while stack:
         widget = stack.pop()
@@ -12,18 +16,24 @@ def get_dag():
             for c in widget.children():
                 if isinstance(c, QtOpenGL.QGLWidget):
                     return c
+
         stack.extend(c for c in widget.children() if c.isWidgetType())
 
 
-def grab_dag(dag, painter, xpos, ypos):
-    dag.updateGL()  # This does some funky back and forth but function grabs the wrong thing without it
+def grab_dag(dag: QtOpenGL.QGLWidget, painter: QtGui.QPainter, xpos: int, ypos: int) -> None:
+    """Draw dag frame buffer to painter image at given coordinates"""
+    # updateGL does some funky stuff because grabFrameBuffer grabs the wrong thing without it
+    dag.updateGL()
     pix = dag.grabFrameBuffer()
     painter.drawImage(xpos, ypos, pix)
 
 
 class DagCapturePanel(QtWidgets.QDialog):
-    def __init__(self):
-        super(DagCapturePanel, self).__init__()
+    """UI Panel for DAG capture options"""
+
+    def __init__(self) -> None:
+        parent = QApplication.instance().activeWindow()
+        super(DagCapturePanel, self).__init__(parent)
 
         # Variables
         self.dag = get_dag()
@@ -32,7 +42,7 @@ class DagCapturePanel(QtWidgets.QDialog):
 
         self.dag_bbox = None
         self.capture_thread = DagCapture(self.dag)
-        self.capture_thread.finished.connect(self.show_finished_popup)
+        self.capture_thread.finished.connect(self.on_thread_finished)
         self.selection = []
 
         # UI
@@ -44,7 +54,7 @@ class DagCapturePanel(QtWidgets.QDialog):
         form_layout.setLabelAlignment(QtCore.Qt.AlignRight)
         main_layout.addLayout(form_layout)
 
-        # Options
+        # region Options
         # Path
         container = QtWidgets.QWidget()
         path_layout = QtWidgets.QHBoxLayout()
@@ -79,23 +89,27 @@ class DagCapturePanel(QtWidgets.QDialog):
         self.ignore_right.setRange(0, 1000)
         self.ignore_right.setValue(200)
         self.ignore_right.setSuffix("px")
-        self.ignore_right.setToolTip("The right side of the DAG usually contains a mini version of itself.\n"
-                                     "This gets included in the screen capture, so it is required to crop it out. \n"
-                                     "If you scaled it down, you can reduce this number to speed up capture slightly.")
+        self.ignore_right.setToolTip(
+            "The right side of the DAG usually contains a mini version of itself.\n"
+            "This gets included in the screen capture, so it is required to crop it out. \n"
+            "If you scaled it down, you can reduce this number to speed up capture slightly."
+        )
         self.ignore_right.valueChanged.connect(self.display_info)
         form_layout.addRow("Crop Right Side", self.ignore_right)
 
         # Delay
         self.delay = QtWidgets.QDoubleSpinBox()
-        self.delay.setValue(.3)
-        self.delay.setRange(0.1, 1)
+        self.delay.setValue(0)
+        self.delay.setRange(0, 1)
         self.delay.setSuffix("s")
         self.delay.setSingleStep(.1)
         self.delay.valueChanged.connect(self.display_info)
-        self.delay.setToolTip("A longer delay ensures the Nuke DAG has fully refreshed between capturing tiles.\n"
-                              "It makes the capture slower, but ensures a correct result.\n"
-                              "Feel free to adjust based on results you have seen on your machine.\n"
-                              "Increase if the capture looks incorrect.")
+        self.delay.setToolTip(
+            "A longer delay ensures the Nuke DAG has fully refreshed between capturing tiles.\n"
+            "It makes the capture slower, but ensures a correct result.\n"
+            "Feel free to adjust based on results you have seen on your machine.\n"
+            "Increase if the capture looks incorrect."
+        )
         form_layout.addRow("Delay Between Captures", self.delay)
 
         # Capture all nodes or selection
@@ -108,6 +122,7 @@ class DagCapturePanel(QtWidgets.QDialog):
         self.deselect = QtWidgets.QCheckBox("Deselect Nodes before capture")
         self.deselect.setChecked(True)
         form_layout.addWidget(self.deselect)
+        # endregion Options
 
         # Add Information box
         self.info = QtWidgets.QLabel("Hi")
@@ -118,7 +133,9 @@ class DagCapturePanel(QtWidgets.QDialog):
         main_layout.addWidget(info_box)
 
         # Buttons
-        button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        button_box = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+        )
         button_box.accepted.connect(self.do_capture)
         button_box.rejected.connect(self.reject)
         main_layout.addWidget(button_box)
@@ -127,15 +144,20 @@ class DagCapturePanel(QtWidgets.QDialog):
 
         self.inspect_dag()
 
-    def display_info(self):
+    def display_info(self) -> None:
+        """Displays the calculated information"""
         zoom = self.zoom_level.value()
+
         # Check the size of the current widget, excluding the right side (because of minimap)
         capture_width = self.dag.width()
         crop = self.ignore_right.value()
         if crop >= capture_width:
-            self.info.setText("Error: Crop is larger than capture area.\n"
-                              "Increase DAG size or reduce crop.")
+            self.info.setText(
+                "Error: Crop is larger than capture area.\n"
+                "Increase DAG size or reduce crop."
+            )
             return
+
         capture_width -= crop
         capture_height = self.dag.height()
 
@@ -152,26 +174,34 @@ class DagCapturePanel(QtWidgets.QDialog):
         info = "Image Size: {width}x{height}\n" \
                "Number of tiles required: {tiles} (Increase DAG size to reduce) \n" \
                "Estimated Capture Duration: {time}s"
-        info = info.format(width=int(image_width), height=int(image_height), tiles=total_tiles, time=total_time)
+        info = info.format(width=int(image_width), height=int(image_height), tiles=total_tiles,
+                           time=total_time)
         self.info.setText(info)
 
-    def inspect_dag(self):
+    def inspect_dag(self) -> None:
+        """Calculate the bounding box for DAG"""
         nodes = nuke.allNodes() if self.capture.currentIndex() == 0 else nuke.selectedNodes()
-        # Calculate the total size of the DAG
-        min_x = min([node.xpos() for node in nodes])
-        min_y = min([node.ypos() for node in nodes])
-        max_x = max([node.xpos() + node.screenWidth() for node in nodes])
-        max_y = max([node.ypos() + node.screenHeight() for node in nodes])
-        self.dag_bbox = (min_x, min_y, max_x, max_y)
 
+        # Calculate the total size of the DAG
+        min_x, min_y, max_x, max_y = [], [], [], []
+        for node in nodes:
+            min_x.append(node.xpos())
+            min_y.append(node.ypos())
+            max_x.append(node.xpos() + node.screenWidth())
+            max_y.append(node.ypos() + node.screenHeight())
+
+        self.dag_bbox = (min(min_x), min(min_y), max(max_x), max(max_y))
         self.display_info()
 
-    def show_file_browser(self):
-        filename, _filter = QtWidgets.QFileDialog.getSaveFileName(parent=self, caption='Select output file',
-                                                                  filter="PNG Image (*.png)")
+    def show_file_browser(self) -> None:
+        """Display the file browser"""
+        filename, _filter = QtWidgets.QFileDialog.getSaveFileName(
+            parent=self, caption='Select output file',
+            filter="PNG Image (*.png)")
         self.path.setText(filename)
 
-    def do_capture(self):
+    def do_capture(self) -> None:
+        """Run the capture thread"""
         self.hide()
 
         # Deselect nodes if required:
@@ -179,6 +209,7 @@ class DagCapturePanel(QtWidgets.QDialog):
             for selected_node in nuke.selectedNodes():
                 self.selection.append(selected_node)
                 selected_node.setSelected(False)
+
         # Push settings to Thread
         self.capture_thread.path = self.path.text()
         self.capture_thread.margins = self.margins.value()
@@ -186,21 +217,40 @@ class DagCapturePanel(QtWidgets.QDialog):
         self.capture_thread.delay = self.delay.value()
         self.capture_thread.bbox = self.dag_bbox
         self.capture_thread.zoom = self.zoom_level.value()
+
         # Run thread
         self.capture_thread.start()
 
-    def show_finished_popup(self):
+    def on_thread_finished(self) -> None:
+        """Re-Select previously selected items and display a result popup"""
+        # Re-Select previously selected items
         for node in self.selection:
             node.setSelected(True)
+
+        # Display a result popup
         if self.capture_thread.successful:
-            nuke.message("Capture complete:\n"
-                         "{}".format(self.path.text()))
+            nuke.message(
+                "Capture complete:\n"
+                "{}".format(self.path.text())
+            )
         else:
-            nuke.message("Something went wrong with the DAG capture, please check script editor for details")
+            nuke.message(
+                "Something went wrong with the DAG capture, please check script editor for details"
+            )
 
 
 class DagCapture(QtCore.QThread):
-    def __init__(self, dag, path='', margins=20, ignore_right=200, delay=0.3, bbox=(-50, 50, -50, 50), zoom=1.0):
+    """Thread class for capturing screenshot of Nuke DAG"""
+    def __init__(
+            self,
+            dag: QtOpenGL.QGLWidget,
+            path: str = '',
+            margins: int = 20,
+            ignore_right: int = 200,
+            delay=0,
+            bbox: Tuple[int, int, int, int] = (-50, 50, -50, 50),
+            zoom: int = 1.0
+    ) -> None:
         super(DagCapture, self).__init__()
         self.dag = dag
         self.path = path
@@ -211,10 +261,12 @@ class DagCapture(QtCore.QThread):
         self.zoom = zoom
         self.successful = False
 
-    def run(self):
+    def run(self) -> None:
+        """On thread start"""
         # Store the current dag size and zoom
         original_zoom = nuke.zoom()
         original_center = nuke.center()
+
         # Calculate the total size of the DAG
         min_x, min_y, max_x, max_y = self.bbox
         zoom = self.zoom
@@ -235,27 +287,41 @@ class DagCapture(QtCore.QThread):
         image_height = int((max_y - min_y) * zoom)
         horizontal_tiles = int(ceil(image_width / float(capture_width)))
         vertical_tiles = int(ceil(image_height / float(capture_height)))
+
         # Create a pixmap to store the results
         pixmap = QtGui.QPixmap(image_width, image_height)
         painter = QtGui.QPainter(pixmap)
         painter.setCompositionMode(painter.CompositionMode_SourceOver)
-        # Move the dag so that the top left corner is in the top left corner, screenshot, paste in the pixmap, repeat
+
+        # Move the dag so that the top left corner is in the top left corner,
+        # screenshot, paste in the pixmap, repeat
         for tile_x in range(horizontal_tiles):
-            center_x = (min_x + capture_width / zoom * tile_x) + (capture_width + self.ignore_right) / zoom / 2
+            x_offset_tile = (min_x + capture_width / zoom * tile_x)
+            x_offset_zoom = (capture_width + self.ignore_right) / zoom / 2
+            center_x = x_offset_tile + x_offset_zoom
             for tile_y in range(vertical_tiles):
                 center_y = (min_y + capture_height / zoom * tile_y) + capture_height / zoom / 2
-                nuke.executeInMainThread(nuke.zoom, (zoom, (center_x, center_y)))
+                nuke.executeInMainThreadWithResult(nuke.zoom, (zoom, (center_x, center_y)))
                 time.sleep(self.delay)
-                nuke.executeInMainThread(grab_dag, (dag, painter, capture_width * tile_x, capture_height * tile_y))
+                nuke.executeInMainThreadWithResult(grab_dag,
+                                                   (dag, painter, capture_width * tile_x,
+                                                    capture_height * tile_y))
         time.sleep(self.delay)
         painter.end()
-        nuke.executeInMainThread(nuke.zoom, (original_zoom, original_center))
-        save_sucessful = pixmap.save(self.path)
-        if not save_sucessful:
+        nuke.executeInMainThreadWithResult(nuke.zoom, (original_zoom, original_center))
+        save_successful = pixmap.save(self.path)
+        if not save_successful:
             raise IOError("Failed to save PNG: %s" % self.path)
+
         self.successful = True
 
 
-if __name__ == '__main__':
+def open_dag_capture() -> None:
+    """Opens a blocking dag capture"""
+    logging.info("Opening dag capture window")
     dag_capture_panel = DagCapturePanel()
     dag_capture_panel.show()
+
+
+if __name__ == '__main__':
+    open_dag_capture()
