@@ -2,6 +2,7 @@ import logging
 from typing import Tuple
 
 import nuke
+import time
 from PySide2 import QtWidgets, QtOpenGL, QtGui, QtCore
 from math import ceil
 
@@ -95,6 +96,21 @@ class DagCapturePanel(QtWidgets.QDialog):
         self.ignore_right.valueChanged.connect(self.display_info)
         form_layout.addRow("Crop Right Side", self.ignore_right)
 
+        # Delay
+        self.delay = QtWidgets.QDoubleSpinBox()
+        self.delay.setValue(0)
+        self.delay.setRange(0, 1)
+        self.delay.setSuffix("s")
+        self.delay.setSingleStep(.1)
+        self.delay.valueChanged.connect(self.display_info)
+        self.delay.setToolTip(
+            "A longer delay ensures the Nuke DAG has fully refreshed between capturing tiles.\n"
+            "It makes the capture slower, but ensures a correct result.\n"
+            "Feel free to adjust based on results you have seen on your machine.\n"
+            "Increase if the capture looks incorrect."
+        )
+        form_layout.addRow("Delay Between Captures", self.delay)
+
         # Capture all nodes or selection
         self.capture = QtWidgets.QComboBox()
         self.capture.addItems(["All Nodes", "Selected Nodes"])
@@ -147,10 +163,13 @@ class DagCapturePanel(QtWidgets.QDialog):
         horizontal_tiles = int(ceil(image_width / float(capture_width)))
         vertical_tiles = int(ceil(image_height / float(capture_height)))
         total_tiles = horizontal_tiles * vertical_tiles
+        total_time = total_tiles * self.delay.value()
 
         info = "Image Size: {width}x{height}\n" \
-               "Number of tiles required: {tiles} (Increase DAG size to reduce) \n"
-        info = info.format(width=int(image_width), height=int(image_height), tiles=total_tiles)
+               "Number of tiles required: {tiles} (Increase DAG size to reduce) \n" \
+               "Estimated Capture Duration: {time}s"
+        info = info.format(width=int(image_width), height=int(image_height), tiles=total_tiles,
+                           time=total_time)
         self.info.setText(info)
 
     def inspect_dag(self) -> None:
@@ -188,6 +207,7 @@ class DagCapturePanel(QtWidgets.QDialog):
         self.capture_thread.path = self.path.text()
         self.capture_thread.margins = self.margins.value()
         self.capture_thread.ignore_right = self.ignore_right.value()
+        self.capture_thread.delay = self.delay.value()
         self.capture_thread.bbox = self.dag_bbox
         self.capture_thread.zoom = self.zoom_level.value()
 
@@ -215,6 +235,7 @@ class DagCapture(QtCore.QThread):
             path: str = '',
             margins: int = 20,
             ignore_right: int = 200,
+            delay=0,
             bbox: Tuple[int, int, int, int] = (-50, 50, -50, 50),
             zoom: int = 1.0
     ) -> None:
@@ -223,6 +244,7 @@ class DagCapture(QtCore.QThread):
         self.path = path
         self.margins = margins
         self.ignore_right = ignore_right
+        self.delay = delay
         self.bbox = bbox
         self.zoom = zoom
         self.successful = False
@@ -264,9 +286,11 @@ class DagCapture(QtCore.QThread):
             for tile_y in range(vertical_tiles):
                 center_y = (min_y + capture_height / zoom * tile_y) + capture_height / zoom / 2
                 nuke.executeInMainThreadWithResult(nuke.zoom, (zoom, (center_x, center_y)))
+                time.sleep(self.delay)
                 nuke.executeInMainThreadWithResult(grab_dag,
                                                    (dag, painter, capture_width * tile_x, capture_height * tile_y))
 
+        time.sleep(self.delay)
         painter.end()
         nuke.executeInMainThreadWithResult(nuke.zoom, (original_zoom, original_center))
         save_successful = pixmap.save(self.path)
