@@ -1,4 +1,3 @@
-import logging
 import nuke
 
 import dag_capture
