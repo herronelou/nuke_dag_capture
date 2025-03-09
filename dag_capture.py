@@ -1,38 +1,63 @@
 import logging
 import nuke
 import time
-from PySide2 import QtWidgets, QtOpenGL, QtGui, QtCore
-from PySide2.QtWidgets import QApplication
+
 from math import ceil
 from typing import Tuple
 
+if nuke.NUKE_VERSION_MAJOR < 16:
+    from PySide2 import QtWidgets, QtOpenGL, QtGui, QtCore
+    DAGType = QtOpenGL.QGLWidget
 
-def get_dag() -> QtOpenGL.QGLWidget:
+    def is_dag_widget(widget):
+        return isinstance(widget, QtOpenGL.QGLWidget)
+else:
+    from PySide6 import QtWidgets, QtGui, QtCore
+    DAGType = QtWidgets.QWidget
+
+    def is_dag_widget(widget):
+        return widget.objectName() == 'DAG'
+
+
+def get_dag() -> DAGType:
     """Retrieve the QGLWidget of DAG graph"""
     stack = QtWidgets.QApplication.topLevelWidgets()
     while stack:
         widget = stack.pop()
         if widget.objectName() == 'DAG.1':
             for c in widget.children():
-                if isinstance(c, QtOpenGL.QGLWidget):
+                if is_dag_widget(c):
                     return c
 
         stack.extend(c for c in widget.children() if c.isWidgetType())
 
 
-def grab_dag(dag: QtOpenGL.QGLWidget, painter: QtGui.QPainter, xpos: int, ypos: int) -> None:
+def grab_dag(dag: DAGType, painter: QtGui.QPainter, xpos: int, ypos: int) -> None:
     """Draw dag frame buffer to painter image at given coordinates"""
     # updateGL does some funky stuff because grabFrameBuffer grabs the wrong thing without it
-    dag.updateGL()
-    pix = dag.grabFrameBuffer()
-    painter.drawImage(xpos, ypos, pix)
+    try:
+        dag.updateGL()
+        img = dag.grabFrameBuffer()
+    except AttributeError:
+        # For PySide6 / Nuke 16. Can't seem to access the Open GL Widget anymore.
+        # Sadly widget.grab() doesn't work either, so we fallback to doing screen captures, even
+        # though it could have the cursor or other windows in the way.
+        QtWidgets.QApplication.processEvents()
+        screen = QtWidgets.QApplication.primaryScreen()
+        # Convert the widget position to screen position
+        pos = dag.mapToGlobal(QtCore.QPoint(0, 0))
+        pix = screen.grabWindow(0, pos.x(), pos.y(), dag.width(), dag.height())
+
+        # Need a QImage for the painter
+        img = pix.toImage()
+    painter.drawImage(xpos, ypos, img)
 
 
 class DagCapturePanel(QtWidgets.QDialog):
     """UI Panel for DAG capture options"""
 
     def __init__(self) -> None:
-        parent = QApplication.instance().activeWindow()
+        parent = QtWidgets.QApplication.instance().activeWindow()
         super(DagCapturePanel, self).__init__(parent)
 
         # Variables
@@ -50,7 +75,7 @@ class DagCapturePanel(QtWidgets.QDialog):
 
         main_layout = QtWidgets.QVBoxLayout()
         form_layout = QtWidgets.QFormLayout()
-        form_layout.setFieldGrowthPolicy(form_layout.AllNonFixedFieldsGrow)
+        form_layout.setFieldGrowthPolicy(QtWidgets.QFormLayout.AllNonFixedFieldsGrow)
         form_layout.setLabelAlignment(QtCore.Qt.AlignRight)
         main_layout.addLayout(form_layout)
 
@@ -58,7 +83,7 @@ class DagCapturePanel(QtWidgets.QDialog):
         # Path
         container = QtWidgets.QWidget()
         path_layout = QtWidgets.QHBoxLayout()
-        path_layout.setMargin(0)
+        path_layout.setContentsMargins(0, 0, 0, 0)
         container.setLayout(path_layout)
         self.path = QtWidgets.QLineEdit()
         browse_button = QtWidgets.QPushButton("Browse")
@@ -127,7 +152,7 @@ class DagCapturePanel(QtWidgets.QDialog):
         # Add Information box
         self.info = QtWidgets.QLabel("Hi")
         info_box = QtWidgets.QFrame()
-        info_box.setFrameStyle(info_box.StyledPanel)
+        info_box.setFrameStyle(QtWidgets.QFrame.StyledPanel)
         info_box.setLayout(QtWidgets.QVBoxLayout())
         info_box.layout().addWidget(self.info)
         main_layout.addWidget(info_box)
@@ -243,7 +268,7 @@ class DagCapture(QtCore.QThread):
     """Thread class for capturing screenshot of Nuke DAG"""
     def __init__(
             self,
-            dag: QtOpenGL.QGLWidget,
+            dag: DAGType,
             path: str = '',
             margins: int = 20,
             ignore_right: int = 200,
@@ -291,7 +316,7 @@ class DagCapture(QtCore.QThread):
         # Create a pixmap to store the results
         pixmap = QtGui.QPixmap(image_width, image_height)
         painter = QtGui.QPainter(pixmap)
-        painter.setCompositionMode(painter.CompositionMode_SourceOver)
+        painter.setCompositionMode(QtGui.QPainter.CompositionMode_SourceOver)
 
         # Move the dag so that the top left corner is in the top left corner,
         # screenshot, paste in the pixmap, repeat
